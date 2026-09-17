@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StayBot - Hotel Recommendation Chatbot</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --bg: #f4f6fb;
+    --bubble-user: #2563eb;
+    --bubble-bot: #ffffff;
+    --text-dark: #1f2937;
+    --text-light: #6b7280;
+    --border: #e5e7eb;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: var(--bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
+  .chat-container {
+    width: 100%;
+    max-width: 480px;
+    height: 100vh;
+    max-height: 720px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chat-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .chat-header .icon {
+    font-size: 22px;
+  }
+
+  .chat-header h1 {
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .chat-header p {
+    font-size: 12px;
+    margin: 0;
+    opacity: 0.85;
+  }
+
+  .chat-messages {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .message {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.4;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: var(--bubble-user);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .message.bot {
+    align-self: flex-start;
+    background: var(--bubble-bot);
+    color: var(--text-dark);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  .message.typing {
+    align-self: flex-start;
+    color: var(--text-light);
+    font-style: italic;
+    font-size: 13px;
+  }
+
+  .chat-input {
+    display: flex;
+    border-top: 1px solid var(--border);
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .chat-input input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+  }
+
+  .chat-input input:focus {
+    border-color: var(--primary);
+  }
+
+  .chat-input button {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 0 20px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .chat-input button:hover {
+    background: var(--primary-dark);
+  }
+
+  .chat-input button:disabled {
+    background: var(--text-light);
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<div class="chat-container">
+  <div class="chat-header">
+    <span class="icon">🏨</span>
+    <div>
+      <h1>StayBot</h1>
+      <p>Your hotel &amp; accommodation recommendation assistant</p>
+    </div>
+  </div>
+
+  <div class="chat-messages" id="chat-messages">
+    <div class="message bot">
+      Hi! I'm StayBot 🏨. Tell me where you're traveling to, your budget,
+      and what you're looking for, and I'll help you find the right place
+      to stay.
+    </div>
+  </div>
+
+  <div class="chat-input">
+    <input
+      type="text"
+      id="user-input"
+      placeholder="e.g. Budget hotels in Goa for a couple, under $50/night"
+      autocomplete="off"
+    />
+    <button id="send-btn">Send</button>
+  </div>
+</div>
+
+<script>
+  const chatMessages = document.getElementById("chat-messages");
+  const userInput = document.getElementById("user-input");
+  const sendBtn = document.getElementById("send-btn");
+
+  // A simple per-tab session id so the backend can keep separate
+  // conversation histories for different browser tabs/users.
+  const sessionId = "session-" + Math.random().toString(36).slice(2);
+
+  function appendMessage(text, sender) {
+    const div = document.createElement("div");
+    div.className = "message " + sender;
+    div.textContent = text;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return div;
+  }
+
+  async function sendMessage() {
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    appendMessage(message, "user");
+    userInput.value = "";
+    sendBtn.disabled = true;
+
+    const typingEl = appendMessage("StayBot is typing...", "typing");
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, session_id: sessionId }),
+      });
+
+      const data = await response.json();
+      typingEl.remove();
+
+      if (!response.ok) {
+        appendMessage(
+          "Sorry, something went wrong: " + (data.error || "Unknown error"),
+          "bot"
+        );
+      } else {
+        appendMessage(data.reply, "bot");
+      }
+    } catch (err) {
+      typingEl.remove();
+      appendMessage("Sorry, I couldn't reach the server. Please try again.", "bot");
+    } finally {
+      sendBtn.disabled = false;
+      userInput.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+  userInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      sendMessage();
+    }
+  });
+</script>
+
+</body>
+</html>
